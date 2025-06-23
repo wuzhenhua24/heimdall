@@ -1,0 +1,13 @@
+#debug: true
+#logging:
+#  level:
+#    com.alibaba.cloud.nacos: DEBUG
+#    com.alibaba.nacos: DEBUG
+spring:
+  application:
+    name: heimdall
+    port: 8080
+  nacos:
+    server-addr: 127.0.0.1:8848 # @Value 会读取这个
+    username: nacos            # @Value 会读取这个
+    password: nacos            # @Value 会读取这个
