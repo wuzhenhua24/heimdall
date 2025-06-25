@@ -61,4 +61,28 @@ public class AppStatusWebSocketServer {
             log.info("Broadcast failed: " + e.getMessage());
         }
     }
+
+    /**
+     * ✅ 新增：发送一个 "ping" 消息给所有客户端以保持连接活跃。
+     */
+    public static void sendPing() {
+        if (clients.isEmpty()) {
+            return;
+        }
+
+        // 我们发送一个简单的 JSON 对象作为 ping 消息
+        // 前端可以忽略这个消息，它的目的只是为了产生网络流量
+        final String pingMessage = "{\"type\":\"ping\"}";
+
+        // log.debug("Pinging {} clients...", clients.size()); // 如果想看日志可以取消注释
+        for (Session session : clients.values()) {
+            try {
+                if (session.isOpen()) {
+                    session.getBasicRemote().sendText(pingMessage);
+                }
+            } catch (IOException e) {
+                log.warn("Failed to send ping to session {}: {}", session.getId(), e.getMessage());
+            }
+        }
+    }
 }
