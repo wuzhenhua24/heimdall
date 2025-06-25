@@ -10,12 +10,14 @@ import jakarta.websocket.server.ServerEndpoint;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
+@CrossOrigin // ✅ 在类上添加这个注解，它会使用你的全局配置或默认允许所有来源
 @ServerEndpoint("/api/v1/status") // 定义WebSocket的访问路径
 public class AppStatusWebSocketServer {
 
