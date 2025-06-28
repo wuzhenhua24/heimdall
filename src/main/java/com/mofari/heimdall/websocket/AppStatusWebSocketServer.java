@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -63,24 +64,24 @@ public class AppStatusWebSocketServer {
     }
 
     /**
-     * ✅ 新增：发送一个 "ping" 消息给所有客户端以保持连接活跃。
+     * 发送一个标准的 WebSocket PING 控制帧来保持连接活跃。
      */
     public static void sendPing() {
         if (clients.isEmpty()) {
             return;
         }
 
-        // 我们发送一个简单的 JSON 对象作为 ping 消息
-        // 前端可以忽略这个消息，它的目的只是为了产生网络流量
-        final String pingMessage = "{\"type\":\"ping\"}";
+        // Ping 帧可以携带一个小的负载，这里我们发送一个空负载。
+        final ByteBuffer pingData = ByteBuffer.wrap(new byte[0]);
 
-        // log.debug("Pinging {} clients...", clients.size()); // 如果想看日志可以取消注释
         for (Session session : clients.values()) {
             try {
                 if (session.isOpen()) {
-                    session.getBasicRemote().sendText(pingMessage);
+                    // 使用 getAsyncRemote() 以异步方式发送，避免阻塞
+                    session.getAsyncRemote().sendPing(pingData);
                 }
             } catch (IOException e) {
+                // 这个异常在异步发送时通常不会立即抛出，但为了代码完整性加上
                 log.warn("Failed to send ping to session {}: {}", session.getId(), e.getMessage());
             }
         }
