@@ -45,33 +45,26 @@ public class NacosListenerService {
                 if (event instanceof com.alibaba.nacos.api.naming.listener.NamingEvent) {
                     com.alibaba.nacos.api.naming.listener.NamingEvent namingEvent = (com.alibaba.nacos.api.naming.listener.NamingEvent) event;
 
-                    String name = namingEvent.getServiceName();
+                    String serviceId = namingEvent.getServiceName();
                     List<Instance> instances = namingEvent.getInstances();
                     // ✅ 使集群名称进行过滤
                     List<Instance> filteredInstances = instances.stream()
                             .filter(instance -> "daily-default".equals(instance.getClusterName()))
                             .collect(Collectors.toList());
 
-                    long totalInstances = filteredInstances.size();
-                    long healthyInstances = filteredInstances.stream().filter(Instance::isHealthy).count();
-                    String status;
+                    String status = calculateStatus(filteredInstances);
 
-                    if (healthyInstances == 0 && totalInstances > 0) {
-                        status = "DOWN"; // 所有实例都不健康
-                    } else if (healthyInstances < totalInstances) {
-                        status = "DEGRADED"; // 部分实例不健康，服务降级
-                    } else if (healthyInstances == totalInstances && totalInstances > 0) {
-                        status = "RUNNING"; // 所有实例都健康
-                    } else {
-                        status = "OFFLINE"; // 没有任何实例
+                    String displayName = serviceId;
+                    if (serviceId.endsWith(".app")) {
+                        displayName = serviceId.substring(0, serviceId.length() -4);
                     }
 
-                    logger.info("Service Change Detected: " + name + " -> " + status);
+                    logger.info("Service Change Detected: id = '{}', name = '{}', status= '{}' " ,serviceId, displayName, status);
 
                     // 创建一个消息对象
                     Map<String, Object> message = new HashMap<>();
-                    message.put("id", name); // 使用服务名作为ID
-                    message.put("name", name);
+                    message.put("id", serviceId); // 使用服务名作为ID
+                    message.put("name", displayName);
                     message.put("status", status);
 
                     // 更新内存中的状态存储
@@ -83,5 +76,23 @@ public class NacosListenerService {
             });
         }
         logger.info("Nacos listeners initialized for " + serviceNames.size() + " services.");
+    }
+
+    /**
+     * 根据实例列表计算服务的总体状态
+     */
+    private String calculateStatus(List<Instance> instances) {
+        if (instances.isEmpty()) {
+            return "OFFLINE";
+        }
+        long totalInstances = instances.size();
+        long healthyInstances = instances.stream().filter(Instance::isHealthy).count();
+        if (healthyInstances == 0) {
+            return "DOWN";
+        } else if (healthyInstances < totalInstances) {
+            return "DEGRADED";
+        } else {
+            return "RUNNING";
+        }
     }
 }
