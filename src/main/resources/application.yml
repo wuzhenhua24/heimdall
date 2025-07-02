@@ -11,3 +11,9 @@ spring:
     server-addr: 127.0.0.1:8848 # @Value 会读取这个
     username: nacos            # @Value 会读取这个
     password: nacos            # @Value 会读取这个
+# 钉钉机器人配置
+dingtalk:
+  webhook: "https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx" # ✅ 粘贴你 Webhook 地址
+appinfo:
+  api:
+    detail-url: "http://ip:port/appinfo-svc/app/detail?app={appName}"
