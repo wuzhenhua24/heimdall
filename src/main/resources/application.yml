@@ -19,10 +19,13 @@ spring:
     # 位于此列表中的服务将完全不被 heimdall 监控
     whitelist-services:
       - another-tool-service.app
+    global-down-threshold: 0.30             # 阈值：30%
+    global-alert-webhook: "https://oapi.dingtalk.com/robot/send?access_token=YYYYYYYY" # ✅ 发送钉钉群的 Webhook
 # 钉钉机器人配置
 dingtalk:
   webhook: "https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx" # ✅ 粘贴你 Webhook 地址
 appinfo:
   api:
     detail-url: "http://ip:port/appinfo-svc/app/detail?app={appName}"
+
 

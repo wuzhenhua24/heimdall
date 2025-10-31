@@ -19,9 +19,8 @@ public class DingTalkNotifierService {
 
     private static final Logger log = LoggerFactory.getLogger(DingTalkNotifierService.class);
 
-    // 从配置文件中注入 Webhook 地址
-    @Value("${dingtalk.webhook}")
-    private String webhookUrl;
+    @Value("${dingtalk.webhook}") // 注入单个应用告警的 Webhook
+    private String defaultWebhook;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -35,37 +34,36 @@ public class DingTalkNotifierService {
      * @param markdownText Markdown 格式的消息内容
      */
     public void sendMarkdownMessage(String title, String markdownText) {
+        sendMarkdownMessage(title, markdownText, this.defaultWebhook);
+    }
+
+    /**
+     * ✅ 更新点：新增一个重载方法，允许动态指定 Webhook URL
+     *
+     * @param title      消息标题
+     * @param text       Markdown 格式的消息内容
+     * @param webhookUrl 目标 Webhook 地址
+     */
+    public void sendMarkdownMessage(String title, String text, String webhookUrl) {
         if (webhookUrl == null || webhookUrl.isEmpty()) {
-            log.warn("钉钉 Webhook 未配置，跳过发送消息。");
+            log.warn("Webhook URL is not configured. Skipping DingTalk message.");
             return;
         }
 
         try {
-            // 构造请求头
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            // 构造请求体
             Map<String, Object> markdown = new HashMap<>();
             markdown.put("title", title);
-            markdown.put("text", markdownText);
+            markdown.put("text", text);
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("msgtype", "markdown");
             requestBody.put("markdown", markdown);
 
-            // 将请求体转为 JSON 字符串
-            String jsonBody = objectMapper.writeValueAsString(requestBody);
-
-            // 创建 HTTP 请求实体
-            HttpEntity<String> requestEntity = new HttpEntity<>(jsonBody, headers);
-
-            // 发送 POST 请求
-            String response = restTemplate.postForObject(webhookUrl, requestEntity, String.class);
-            log.info("成功发送钉钉消息，响应: {}", response);
-
+            // 发送消息
+            restTemplate.postForObject(webhookUrl, requestBody, String.class);
+            log.info("Successfully sent DingTalk message to {}", webhookUrl.substring(0, 30)); // 截断URL防日志刷屏
         } catch (Exception e) {
-            log.error("发送钉钉消息时发生错误", e);
+            log.error("Failed to send DingTalk message: " + e.getMessage(), e);
         }
     }
 }

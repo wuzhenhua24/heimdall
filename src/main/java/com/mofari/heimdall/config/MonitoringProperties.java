@@ -31,4 +31,10 @@ public class MonitoringProperties {
      */
     private List<String> whitelistServices = new ArrayList<>();
 
+    // ✅ 更新点：新增全局告警阈值，默认为30%
+    private double globalDownThreshold = 0.30;
+
+    // ✅ 更新点：新增全局告警专用的 Webhook 地址
+    private String globalAlertWebhook;
+
 }

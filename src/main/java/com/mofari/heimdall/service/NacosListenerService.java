@@ -15,6 +15,8 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicInteger; // ✅ 更新点：引入原子计数器
+
 
 @Service
 public class NacosListenerService {
@@ -44,6 +46,11 @@ public class NacosListenerService {
     private Set<String> targetClusterSet;
     private List<String> excludeKeywords;
 
+    // ✅ 更新点：新增全局状态追踪变量
+    private int totalMonitoredServices = 0; // 监控的服务总数
+    private final AtomicInteger downServiceCount = new AtomicInteger(0); // 当前 DOWN 的服务数量
+    private volatile boolean isGlobalAlertSent = false; // 全局告警是否已发送的标记
+
     @PostConstruct
     public void init() throws Exception {
         this.whitelistSet = new HashSet<>(monitoringProperties.getWhitelistServices());
@@ -65,9 +72,15 @@ public class NacosListenerService {
                 .collect(Collectors.toList());
 
         logger.info("After filtering, {} services will be monitored: {}", targetServiceNames.size(), targetServiceNames);
+        // ✅ 更新点：记录监控的服务总数
+        this.totalMonitoredServices = targetServiceNames.size();
+        logger.info("Total services to be monitored: {}", this.totalMonitoredServices);
 
-        // 只为最终的目标服务列表创建订阅
-        logger.info("After filtering, {} services will be monitored: {}", targetServiceNames.size(), targetServiceNames);
+        // ✅ 更新点：在订阅前，初始化所有被监控服务的状态为 UNKNOWN
+        // 这对于后续计算全局宕机比例至关重要
+        for (String serviceName : targetServiceNames) {
+            appStatusStore.updateStatus(Map.of("id", serviceName, "name", formatDisplayName(serviceName), "status", "UNKNOWN"));
+        }
 
         for (String serviceName : targetServiceNames) {
             // 为每个服务注册一个监听器
@@ -88,7 +101,7 @@ public class NacosListenerService {
     private void handleNacosEvent(NamingEvent namingEvent) {
         String serviceId = namingEvent.getServiceName();
         Object lock = serviceLocks.computeIfAbsent(serviceId, k -> new Object());
-        String displayName = serviceId.endsWith(".app") ? serviceId.substring(0, serviceId.length() - 4) : serviceId;
+        String displayName = formatDisplayName(serviceId);
 
         synchronized (lock) {
             List<Instance> filteredInstances = namingEvent.getInstances().stream()
@@ -108,7 +121,12 @@ public class NacosListenerService {
             // 2. 只有当状态发生变化时，才进行处理
             if (!newStatus.equals(oldStatus)) {
                 logger.info("状态变更: 服务 '{}' 从 '{}' 变为 '{}'", serviceId, oldStatus, newStatus);
-
+                // --- ✅ 更新点：更新全局宕机计数 ---
+                if ("DOWN".equals(newStatus) && !"DOWN".equals(oldStatus)) {
+                    downServiceCount.incrementAndGet(); // 状态变为 DOWN，计数器+1
+                } else if (!"DOWN".equals(newStatus) && "DOWN".equals(oldStatus)) {
+                    downServiceCount.decrementAndGet(); // 状态从 DOWN 恢复，计数器-1
+                }
                 // 3. 判断是否需要发送告警
                 // ✅ 核心修改：增加对 oldStatus 的判断，确保不是从 UNKNOWN 状态变为 DOWN
                 if ("DOWN".equals(newStatus) && !"UNKNOWN".equals(oldStatus)) {
@@ -168,5 +186,52 @@ public class NacosListenerService {
 
     private String getCurrentTimestamp() {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+    }
+
+    private String formatDisplayName(String serviceId) {
+        return serviceId.endsWith(".app") ? serviceId.substring(0, serviceId.length() - 4) : serviceId;
+    }
+
+    /**
+     * ✅ 更新点：新增方法，检查并发送全局告警
+     */
+    private void checkAndSendGlobalAlert() {
+        if (totalMonitoredServices == 0) {
+            return; // 如果监控的服务总数为0，则不执行
+        }
+
+        double currentDownRatio = (double) downServiceCount.get() / totalMonitoredServices;
+        double threshold = monitoringProperties.getGlobalDownThreshold();
+
+        // 1. 检查是否触发了宕机阈值
+        if (currentDownRatio >= threshold) {
+            // 如果超过阈值，并且告警 *尚未* 发送
+            if (!isGlobalAlertSent) {
+                String title = "🔥 系统重大告警";
+                String text = String.format("#### %s\n\n> **警告**: 系统中 **%d%%** 的服务处于DOWN状态（%d/%d），已超过 **%.0f%%** 的阈值！\n\n> **请立即检查系统！**\n\n> **时间**: %s",
+                        title, (int)(currentDownRatio * 100), downServiceCount.get(), totalMonitoredServices, threshold * 100, getCurrentTimestamp());
+
+                // 使用全局 Webhook 发送
+                dingTalkNotifierService.sendMarkdownMessage(title, text, monitoringProperties.getGlobalAlertWebhook());
+
+                isGlobalAlertSent = true; // 将标记设置为已发送
+                logger.warn("全局告警阈值已触发 ({} DOWN / {} TOTAL = {}%)", downServiceCount.get(), totalMonitoredServices, (int)(currentDownRatio * 100));
+            }
+        }
+        // 2. 检查是否从宕机状态中恢复
+        else {
+            // 如果低于阈值，并且告警 *之前* 发送过
+            if (isGlobalAlertSent) {
+                String title = " recoveries: 系统已恢复";
+                String text = String.format("#### %s\n\n> **通知**: 系统已从重大告警中恢复。\n\n> **当前宕机比例**: **%d%%**（%d/%d），已低于 **%.0f%%** 的阈值。\n\n> **时间**: %s",
+                        title, (int)(currentDownRatio * 100), downServiceCount.get(), totalMonitoredServices, threshold * 100, getCurrentTimestamp());
+
+                // 同样使用全局 Webhook 发送
+                dingTalkNotifierService.sendMarkdownMessage(title, text, monitoringProperties.getGlobalAlertWebhook());
+
+                isGlobalAlertSent = false; // 重置标记
+                logger.info("全局告警状态已恢复 ({} DOWN / {} TOTAL = {}%)", downServiceCount.get(), totalMonitoredServices, (int)(currentDownRatio * 100));
+            }
+        }
     }
 }
