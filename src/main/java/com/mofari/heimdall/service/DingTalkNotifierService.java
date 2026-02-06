@@ -1,21 +1,19 @@
 package com.mofari.heimdall.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Service
-public class DingTalkNotifierService {
+@ConditionalOnProperty(prefix = "spring.monitoring", name = "alert-channel", havingValue = "dingtalk")
+public class DingTalkNotifierService implements AlertNotifier {
 
     private static final Logger log = LoggerFactory.getLogger(DingTalkNotifierService.class);
 
@@ -25,8 +23,15 @@ public class DingTalkNotifierService {
     @Autowired
     private RestTemplate restTemplate;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Override
+    public void sendMarkdownMessage(String title, String markdownText, AlertLevel level) {
+        sendMarkdownMessage(title, markdownText, this.defaultWebhook);
+    }
+
+    @Override
+    public void sendMarkdownMessage(String title, String markdownText, String webhookUrl, AlertLevel level) {
+        sendMarkdownMessage(title, markdownText, webhookUrl);
+    }
 
     /**
      * 发送 Markdown 格式的钉钉消息

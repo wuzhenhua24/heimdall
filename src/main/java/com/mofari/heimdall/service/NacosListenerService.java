@@ -29,7 +29,7 @@ public class NacosListenerService {
     private AppStatusStore appStatusStore; // ✅ 注入状态存储服务
 
     @Autowired
-    private DingTalkNotifierService dingTalkNotifierService;
+    private AlertNotifier alertNotifier;
 
     @Autowired
     private AppInfoService appInfoService;
@@ -138,14 +138,14 @@ public class NacosListenerService {
                     String title = "🚨 服务宕机警报";
                     String text = String.format("#### %s\n\n> **服务名**: %s\n\n> **负责人**: %s\n\n> **当前状态**: <font color='#dd0000'>**%s**</font>\n\n> **时间**: %s",
                             title, serviceId, ownerText, newStatus, getCurrentTimestamp());
-                    dingTalkNotifierService.sendMarkdownMessage(title, text);
+                    alertNotifier.sendMarkdownMessage(title, text, AlertLevel.DOWN);
 
                 } else if ("RUNNING".equals(newStatus) && "DOWN".equals(oldStatus)) {
                     // 如果是从 DOWN 恢复到 RUNNING，发送恢复通知
                     String title = "✅ 服务恢复通知";
                     String text = String.format("#### %s\n\n> **服务名**: %s\n\n> **当前状态**: <font color='#008000'>**%s**</font>\n\n> **时间**: %s",
                             title, serviceId, newStatus, getCurrentTimestamp());
-                    dingTalkNotifierService.sendMarkdownMessage(title, text);
+                    alertNotifier.sendMarkdownMessage(title, text, AlertLevel.RECOVERY);
                 }
             }
             // 创建消息体并更新
@@ -212,7 +212,7 @@ public class NacosListenerService {
                         title, (int)(currentDownRatio * 100), downServiceCount.get(), totalMonitoredServices, threshold * 100, getCurrentTimestamp());
 
                 // 使用全局 Webhook 发送
-                dingTalkNotifierService.sendMarkdownMessage(title, text, monitoringProperties.getGlobalAlertWebhook());
+                alertNotifier.sendMarkdownMessage(title, text, monitoringProperties.getGlobalAlertWebhook(), AlertLevel.CRITICAL);
 
                 isGlobalAlertSent = true; // 将标记设置为已发送
                 logger.warn("全局告警阈值已触发 ({} DOWN / {} TOTAL = {}%)", downServiceCount.get(), totalMonitoredServices, (int)(currentDownRatio * 100));
@@ -227,7 +227,7 @@ public class NacosListenerService {
                         title, (int)(currentDownRatio * 100), downServiceCount.get(), totalMonitoredServices, threshold * 100, getCurrentTimestamp());
 
                 // 同样使用全局 Webhook 发送
-                dingTalkNotifierService.sendMarkdownMessage(title, text, monitoringProperties.getGlobalAlertWebhook());
+                alertNotifier.sendMarkdownMessage(title, text, monitoringProperties.getGlobalAlertWebhook(), AlertLevel.RECOVERY);
 
                 isGlobalAlertSent = false; // 重置标记
                 logger.info("全局告警状态已恢复 ({} DOWN / {} TOTAL = {}%)", downServiceCount.get(), totalMonitoredServices, (int)(currentDownRatio * 100));

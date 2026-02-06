@@ -19,13 +19,16 @@ spring:
     # 位于此列表中的服务将完全不被 heimdall 监控
     whitelist-services:
       - another-tool-service.app
+    alert-channel: feishu                 # 告警通道：feishu / dingtalk
     global-down-threshold: 0.30             # 阈值：30%
-    global-alert-webhook: "https://oapi.dingtalk.com/robot/send?access_token=YYYYYYYY" # ✅ 发送钉钉群的 Webhook
-# 钉钉机器人配置
+    global-alert-webhook: "https://open.feishu.cn/open-apis/bot/hook/YYYYYYYY" # ✅ 发送飞书群的 Webhook
+# 飞书机器人配置
+feishu:
+  webhook: "https://open.feishu.cn/open-apis/bot/hook/xxxxxxxx" # ✅ 粘贴你 Webhook 地址
+# 钉钉机器人配置（保留备用）
 dingtalk:
   webhook: "https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx" # ✅ 粘贴你 Webhook 地址
 appinfo:
   api:
     detail-url: "http://ip:port/appinfo-svc/app/detail?app={appName}"
-
 
